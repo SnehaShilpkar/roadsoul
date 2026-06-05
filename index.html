@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>RoadSoul — Indian Highway Guide</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Inter', Arial, sans-serif; display: flex; height: 100vh; }
+      #sidebar { width: 320px; min-width: 320px; height: 100vh; overflow-y: auto; background: #0f0f1a; color: #eee; padding: 0; z-index: 1000; scrollbar-width: thin; scrollbar-color: #1e1e3a #0f0f1a; }
+      #header { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 20px; border-bottom: 1px solid #1e1e3a; position: sticky; top: 0; z-index: 10; }
+      #header h1 { font-size: 24px; font-weight: 700; color: #4fc3f7; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+      #header .subtitle { font-size: 12px; color: #666; margin-top: 4px; }
+      .sidebar-content { padding: 16px; }
+      #corridor-selector { margin-bottom: 16px; }
+      #corridor-selector h3 { font-size: 10px; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+      .corridor-btn { display: block; width: 100%; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 6px; font-weight: 600; cursor: pointer; border: 1px solid #1e2a3a; background: #0f0f1a; color: #666; transition: all 0.2s; text-align: left; font-family: 'Inter', Arial, sans-serif; }
+      .corridor-btn:hover { border-color: #4fc3f7; color: #4fc3f7; }
+      .corridor-btn.active { background: #16213e; border-color: #4fc3f7; color: #4fc3f7; }
+      #route-stats { display: flex; justify-content: space-between; background: #16213e; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid #1e2a3a; }
+      .stat-item { text-align: center; }
+      .stat-value { font-size: 15px; font-weight: 700; color: #4fc3f7; }
+      .stat-label { font-size: 10px; color: #555; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .season-banner { border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; font-size: 12px; line-height: 1.6; }
+      .season-banner .season-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+      .season-best    { background: #0d2818; border-left: 3px solid #2ecc71; }
+      .season-monsoon { background: #2d2400; border-left: 3px solid #f1c40f; }
+      .season-closing { background: #2d1200; border-left: 3px solid #e67e22; }
+      .season-winter  { background: #0a1520; border-left: 3px solid #3498db; }
+      .current-season { outline: 1px solid #4fc3f7; }
+      .season-toggle { font-size: 11px; color: #4fc3f7; cursor: pointer; margin-bottom: 14px; text-align: right; opacity: 0.8; }
+      #all-seasons { display: none; margin-bottom: 12px; }
+      #filters { margin-bottom: 16px; }
+      #filters h3 { font-size: 10px; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+      .filter-btn { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; margin: 2px; font-weight: 600; cursor: pointer; opacity: 0.4; transition: all 0.2s; border: none; }
+      .filter-btn.active { opacity: 1; transform: scale(1.05); }
+      .filter-all   { background: #4fc3f7; color: #0f0f1a; }
+      .f-scenic     { background: #d4edda; color: #155724; }
+      .f-unsafe     { background: #fff3cd; color: #856404; }
+      .f-fuel       { background: #e2d9f3; color: #4a235a; }
+      .f-no-network { background: #f5c6cb; color: #721c24; }
+      .f-food       { background: #ffeeba; color: #856404; }
+      .f-permit     { background: #d6d8db; color: #383d41; }
+      .f-road       { background: #fde8d8; color: #7d3c00; }
+      #stop-info { background: #16213e; border-radius: 12px; padding: 16px; margin-bottom: 14px; border: 1px solid #1e2a3a; min-height: 120px; }
+      #stop-info h2 { font-size: 17px; font-weight: 700; color: #4fc3f7; margin-bottom: 8px; }
+      #stop-info p  { font-size: 12px; color: #aaa; line-height: 1.7; margin-bottom: 12px; }
+      .tag { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; margin: 2px; font-weight: 600; }
+      .scenic     { background: #d4edda; color: #155724; }
+      .rough      { background: #f8d7da; color: #721c24; }
+      .safe       { background: #d1ecf1; color: #0c5460; }
+      .unsafe     { background: #fff3cd; color: #856404; }
+      .fuel       { background: #e2d9f3; color: #4a235a; }
+      .no-network { background: #f5c6cb; color: #721c24; }
+      .food       { background: #ffeeba; color: #856404; }
+      .permit     { background: #d6d8db; color: #383d41; }
+      .default-msg { color: #444; font-size: 13px; text-align: center; padding: 30px 0; }
+      #road-condition { background: #0f1e2e; border-radius: 10px; padding: 12px 14px; margin-top: 10px; border: 1px solid #1e2a3a; display: none; }
+      #road-condition h4 { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 600; }
+      .condition-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+      .condition-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+      .condition-smooth     { background: #0d2818; color: #2ecc71; border: 1px solid #2ecc71; }
+      .condition-rough      { background: #2d2400; color: #f1c40f; border: 1px solid #f1c40f; }
+      .condition-very-rough { background: #2d1200; color: #e67e22; border: 1px solid #e67e22; }
+      .condition-tip { font-size: 11px; color: #888; line-height: 1.6; }
+      #weather-box { background: #0f1e2e; border-radius: 10px; padding: 12px 14px; margin-top: 12px; border: 1px solid #1e2a3a; display: none; }
+      #weather-box h4 { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 600; }
+      .weather-main { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+      .weather-temp { font-size: 28px; font-weight: 700; color: #4fc3f7; }
+      .weather-desc { font-size: 12px; color: #aaa; }
+      .weather-details { display: flex; gap: 12px; }
+      .weather-detail { font-size: 11px; color: #666; }
+      .weather-detail span { color: #aaa; }
+      #notes-section { background: #16213e; border-radius: 12px; padding: 16px; margin-bottom: 14px; border: 1px solid #1e2a3a; display: none; }
+      #notes-section h3 { font-size: 13px; font-weight: 600; color: #4fc3f7; margin-bottom: 12px; }
+      .note-item { background: #0f0f1a; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; border: 1px solid #1e1e3a; }
+      .note-traveller { color: #4fc3f7; font-weight: 600; font-size: 12px; margin-bottom: 3px; }
+      .note-text { color: #bbb; font-size: 12px; line-height: 1.5; margin-bottom: 4px; }
+      .note-date { color: #444; font-size: 10px; }
+      .no-notes  { color: #444; font-size: 12px; margin-bottom: 10px; }
+      .note-form input, .note-form textarea { width: 100%; background: #0f0f1a; border: 1px solid #1e2a3a; color: #eee; border-radius: 8px; padding: 9px 12px; font-size: 12px; margin-bottom: 8px; outline: none; font-family: 'Inter', Arial, sans-serif; transition: border 0.2s; }
+      .note-form input:focus, .note-form textarea:focus { border-color: #4fc3f7; }
+      .note-form textarea { height: 70px; resize: none; }
+      .note-form input::placeholder, .note-form textarea::placeholder { color: #333; }
+      .note-form button { width: 100%; background: #4fc3f7; color: #0f0f1a; border: none; border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.2s; font-family: 'Inter', Arial, sans-serif; }
+      .note-form button:hover { background: #81d4fa; }
+      .stops-list { margin-top: 4px; margin-bottom: 14px; }
+      .stops-list h3 { font-size: 10px; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+      .stop-item { padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; color: #888; margin-bottom: 3px; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+      .stop-item:hover { background: #16213e; color: #fff; }
+      .stop-item.hidden { display: none; }
+      .stop-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+      .rs-marker { width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.5); transition: transform 0.15s ease; cursor: pointer; }
+      .rs-marker:hover { transform: scale(1.5); }
+      .rs-marker-entry { width: 20px; height: 20px; border-radius: 50%; border: 3px solid #2ecc71; box-shadow: 0 0 12px #2ecc71; cursor: pointer; }
+      .rs-marker-exit  { width: 20px; height: 20px; border-radius: 50%; border: 3px solid #e74c3c; box-shadow: 0 0 12px #e74c3c; cursor: pointer; }
+      #route-planner { background: #16213e; border-radius: 12px; padding: 16px; margin-bottom: 14px; border: 1px solid #1e2a3a; }
+      #route-planner h3 { font-size: 13px; font-weight: 600; color: #4fc3f7; margin-bottom: 12px; }
+      .planner-row { margin-bottom: 10px; }
+      .planner-row label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; display: block; margin-bottom: 5px; }
+      .planner-row select { width: 100%; background: #0f0f1a; border: 1px solid #1e2a3a; color: #eee; border-radius: 8px; padding: 9px 12px; font-size: 12px; outline: none; font-family: 'Inter', Arial, sans-serif; cursor: pointer; transition: border 0.2s; appearance: none; }
+      .planner-row select:focus { border-color: #4fc3f7; }
+      .planner-btn { width: 100%; background: linear-gradient(135deg, #4fc3f7, #0288d1); color: #0f0f1a; border: none; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; font-family: 'Inter', Arial, sans-serif; margin-top: 4px; }
+      .planner-btn:hover { opacity: 0.85; }
+      .planner-clear { width: 100%; background: transparent; color: #e74c3c; border: 1px solid #e74c3c; border-radius: 8px; padding: 7px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: 'Inter', Arial, sans-serif; margin-top: 6px; display: none; }
+      .planner-clear:hover { background: #e74c3c; color: #fff; }
+      #planner-result { margin-top: 10px; font-size: 12px; color: #aaa; background: #0f1e2e; border-radius: 8px; padding: 10px 12px; display: none; line-height: 1.7; border: 1px solid #1e2a3a; }
+      #planner-result .pr-stops { color: #4fc3f7; font-weight: 600; margin-bottom: 4px; }
+      #leh-banner { background: linear-gradient(135deg, #0d2035, #1a1a2e); border: 1px solid #4fc3f7; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; display: none; }
+      #leh-banner p { font-size: 12px; color: #aaa; margin-bottom: 10px; line-height: 1.6; }
+      #leh-banner button { width: 100%; background: linear-gradient(135deg, #4fc3f7, #0288d1); color: #0f0f1a; border: none; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: 'Inter', Arial, sans-serif; transition: opacity 0.2s; }
+      #leh-banner button:hover { opacity: 0.85; }
+      #map-legend { position: fixed; bottom: 30px; left: 340px; background: rgba(15,15,26,0.93); border-radius: 10px; padding: 10px 14px; z-index: 999; border: 1px solid #1e2a3a; font-family: 'Inter', Arial, sans-serif; }
+      #map-legend h4 { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 600; }
+      .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11px; color: #aaa; }
+      .legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid white; flex-shrink: 0; }
+      #map { flex: 1; height: 100vh; }
+      #corridor-loader { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,15,26,0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; gap: 16px; }
+      #corridor-loader.show { display: flex; }
+      .spinner { width: 40px; height: 40px; border: 3px solid #1e2a3a; border-top: 3px solid #4fc3f7; border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .spinner-text { color: #4fc3f7; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+      #menu-toggle { display: none; position: fixed; top: 12px; left: 12px; z-index: 2000; background: #16213e; border: 1px solid #1e2a3a; color: #4fc3f7; border-radius: 8px; padding: 8px 12px; font-size: 18px; cursor: pointer; }
+      #sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 998; }
+      @media (max-width: 768px) {
+        #menu-toggle { display: block; }
+        #sidebar { position: fixed; top: 0; left: -320px; height: 100vh; z-index: 999; transition: left 0.3s ease; width: 300px; min-width: 300px; }
+        #sidebar.open { left: 0; }
+        #sidebar-overlay.show { display: block; }
+        #map { width: 100vw; height: 100vh; }
+        #map-legend { left: 10px; bottom: 70px; font-size: 10px; padding: 8px 10px; }
+        #map-legend .legend-item { font-size: 10px; }
+      }
+    </style>
+  </head>
+  <body>
+    <button id="menu-toggle" onclick="toggleSidebar()">☰</button>
+    <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <div id="sidebar">
+      <div id="header">
+        <h1>🛣️ RoadSoul</h1>
+        <div class="subtitle" id="header-subtitle">Indian Highway Guide</div>
+      </div>
+      <div class="sidebar-content">
+
+        <div id="corridor-selector">
+          <h3>Choose Your Route</h3>
+          <button class="corridor-btn active" onclick="loadCorridor('delhi-manali', this)">🏔️ Delhi → Manali</button>
+          <button class="corridor-btn" onclick="loadCorridor('delhi-leh', this)">🏔️ Delhi → Leh</button>
+          <button class="corridor-btn" onclick="loadCorridor('delhi-shimla', this)">🏔️ Delhi → Shimla</button>
+          <button class="corridor-btn" onclick="loadCorridor('pune-goa', this)">🌊 Pune → Goa</button>
+          <button class="corridor-btn" onclick="loadCorridor('mumbai-goa', this)">🌊 Mumbai → Goa</button>
+          <button class="corridor-btn" onclick="loadCorridor('bangalore-coorg', this)">🌿 Bangalore → Coorg</button>
+          <button class="corridor-btn" onclick="loadCorridor('chennai-ooty', this)">🌿 Chennai → Ooty</button>
+          <button class="corridor-btn" onclick="loadCorridor('hyderabad-hampi', this)">🏛️ Hyderabad → Hampi</button>
+          <button class="corridor-btn" onclick="loadCorridor('mumbai-pune', this)">🌄 Mumbai → Pune</button>
+        </div>
+
+        <div id="route-stats">
+          <div class="stat-item"><div class="stat-value" id="stat-distance">~540 km</div><div class="stat-label">Distance</div></div>
+          <div class="stat-item"><div class="stat-value" id="stat-time">12-14 hrs</div><div class="stat-label">Travel Time</div></div>
+          <div class="stat-item"><div class="stat-value" id="stop-count">12</div><div class="stat-label">Key Stops</div></div>
+        </div>
+
+        <div id="current-season-banner"></div>
+        <div class="season-toggle" onclick="toggleSeasons()">📅 View all seasons ▾</div>
+        <div id="all-seasons"></div>
+
+        <div id="filters">
+          <h3>Filter Stops</h3>
+          <button class="filter-btn filter-all active" onclick="filterStops('all', event)">All</button>
+          <button class="filter-btn f-scenic"     onclick="filterStops('scenic', event)">🏔️ Scenic</button>
+          <button class="filter-btn f-fuel"       onclick="filterStops('fuel', event)">⛽ Fuel</button>
+          <button class="filter-btn f-food"       onclick="filterStops('food', event)">🍽️ Food</button>
+          <button class="filter-btn f-unsafe"     onclick="filterStops('unsafe', event)">⚠️ Unsafe Night</button>
+          <button class="filter-btn f-no-network" onclick="filterStops('no-network', event)">📵 No Network</button>
+          <button class="filter-btn f-permit"     onclick="filterStops('permit', event)">📋 Permit</button>
+          <button class="filter-btn f-road"       onclick="filterStops('very-rough', event)">🛣️ Rough Roads</button>
+        </div>
+
+        <div id="stop-info">
+          <div class="default-msg">👆 Click any marker<br>to see road info</div>
+        </div>
+
+        <div id="notes-section">
+          <h3>💬 Traveller Notes</h3>
+          <div id="notes-list"></div>
+          <div class="note-form">
+            <input type="text" id="note-name" placeholder="Your name" maxlength="50" />
+            <textarea id="note-text" placeholder="Share something about this stop..."></textarea>
+            <button onclick="submitNote()">+ Add Note</button>
+          </div>
+        </div>
+
+        <div id="route-planner">
+          <h3>🗺️ Plan Your Route</h3>
+          <div class="planner-row">
+            <label>📍 Entry Point</label>
+            <select id="entry-select"><option value="">-- Select your start --</option></select>
+          </div>
+          <div class="planner-row">
+            <label>🏁 Exit Point</label>
+            <select id="exit-select"><option value="">-- Select your end --</option></select>
+          </div>
+          <button class="planner-btn" onclick="planRoute()">Show My Route →</button>
+          <button class="planner-clear" id="clear-btn" onclick="clearRoute(false)">✕ Clear Route</button>
+          <div id="planner-result"></div>
+        </div>
+
+        <div id="leh-banner">
+          <p>🏔️ <strong style="color:#4fc3f7;">Feeling adventurous?</strong><br>
+          Continue from Manali to Leh via Rohtang Pass, Baralacha La and Tanglang La. ~480 km more, 2 days ride.</p>
+          <button onclick="continueToLeh()">Continue to Leh →</button>
+        </div>
+
+        <div class="stops-list">
+          <h3>All Stops</h3>
+          <div id="stops-list-items"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="map-legend">
+      <h4>Map Legend</h4>
+      <div class="legend-item"><div class="legend-dot" style="background:#e74c3c"></div> Dangerous / Freezing</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2ecc71"></div> Scenic / Beautiful</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div> Caution / No Network</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f1c40f"></div> Food / Fuel Stop</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4fc3f7"></div> Safe Stop</div>
+    </div>
+
+    <div id="corridor-loader">
+      <div class="spinner"></div>
+      <div class="spinner-text" id="spinner-text">Loading route...</div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+      var FLASK_URL = window.location.origin;
+
+      var ALL_STOPS = {
+        'delhi-manali': {
+          label:'Delhi → Manali', subtitle:'Delhi → Manali · Highway Guide',
+          distance:'~540 km', time:'12-14 hrs', center:[31.0,77.2], zoom:7,
+          seasons:[
+            {cls:"season-best",    title:"🟢 March to June — Best Time",     msg:"Ideal weather, open roads. Rohtang Pass opens late May."},
+            {cls:"season-monsoon", title:"🟡 July to September — Monsoon",   msg:"Heavy rain causes landslides on Beas gorge road. Check road status daily."},
+            {cls:"season-closing", title:"🟠 October to November — Closing", msg:"Snow expected from late October. Plan before mid-October."},
+            {cls:"season-winter",  title:"❄️ December to February — Winter", msg:"Rohtang Pass closed. Snow chains needed beyond Solang Valley."}
+          ],
+          stops:[
+            {id:1,  name:"Delhi",         lat:28.6139, lng:77.2090, description:"Start your journey. Fill fuel, carry cash for toll booths ahead.",                           tags:["fuel","safe"],             labels:["⛽ Fuel Available","🌙 Safe at Night"],                condition:"smooth",     condition_label:"Smooth — NH highway",                    condition_tip:"Well maintained city roads and expressway. No issues."},
+            {id:2,  name:"Murthal",       lat:29.0167, lng:76.9833, description:"Famous breakfast stop! Best parathas with butter and curd. Dhabas open 24/7.",              tags:["food","safe","fuel"],       labels:["🍽️ Famous Food Stop","🌙 Safe at Night","⛽ Fuel Available"], condition:"smooth", condition_label:"Smooth — NH1 expressway",                condition_tip:"Excellent road quality. Cruise comfortably."},
+            {id:3,  name:"Chandigarh",    lat:30.7333, lng:76.7794, description:"Last major city. Stock up on everything — fuel, medicines, cash, food.",                    tags:["fuel","food","safe"],       labels:["⛽ Fuel Available","🍽️ Good Food","🌙 Safe at Night"],    condition:"smooth",     condition_label:"Smooth — well maintained city roads",    condition_tip:"Good roads through Chandigarh. Easy driving."},
+            {id:4,  name:"Swarghat",      lat:31.1500, lng:76.8300, description:"You've entered Himachal! Beautiful tea stop with mountain views.",                          tags:["scenic","food"],            labels:["🏔️ Scenic Views","🍽️ Tea Stop"],                          condition:"rough",      condition_label:"Rough — hilly roads begin here",         condition_tip:"Roads get narrower and windier. Manageable for all vehicles. Drive below 40kmph."},
+            {id:5,  name:"Bilaspur",      lat:31.3400, lng:76.7600, description:"Gobind Sagar Lake visible from road. Good place to stretch and eat.",                       tags:["scenic","food","fuel"],     labels:["🏔️ Lake Views","🍽️ Good Dhabas","⛽ Fuel Available"],     condition:"rough",      condition_label:"Rough — winding mountain road",          condition_tip:"Curvy roads along the lake. All vehicles manageable. Take it slow."},
+            {id:6,  name:"Mandi",         lat:31.7080, lng:76.9320, description:"Last proper town before mountain roads get serious. Avoid night drive ahead.",              tags:["fuel","food","unsafe"],     labels:["⛽ Fuel Available","🍽️ Good Food","⚠️ Avoid Night Drive Ahead"], condition:"rough", condition_label:"Rough — mountain terrain starts",       condition_tip:"Roads are manageable but get serious after this. All vehicles okay till here."},
+            {id:7,  name:"Bhuntar",       lat:31.8700, lng:77.1100, description:"Network starts getting weak. Inform family before signal drops.",                           tags:["no-network","fuel"],        labels:["📵 Network Gets Weak","⛽ Fuel Available"],               condition:"rough",      condition_label:"Rough — narrow mountain roads",          condition_tip:"Gets narrower with sharp turns. Drive carefully. Cars and bikes both manageable."},
+            {id:8,  name:"Kullu",         lat:31.9579, lng:77.1095, description:"Beas River flows alongside. Scenic but curvy. Drive slow.",                                tags:["scenic","rough","fuel"],    labels:["🏔️ Beas River Begins","🛣️ Curvy Roads","⛽ Fuel Available"], condition:"rough", condition_label:"Rough — riverside curves ahead",         condition_tip:"Curvy roads alongside Beas river. Beautiful but needs full attention. All vehicles okay."},
+            {id:9,  name:"Manali",        lat:32.2396, lng:77.1887, description:"You made it! Explore Old Manali, Hadimba Temple, Solang Valley nearby.",                   tags:["scenic","fuel"],            labels:["🏔️ Scenic","⛽ Fuel Available"],                           condition:"rough",      condition_label:"Rough — last town before high altitude", condition_tip:"Town roads are fine. Roads beyond Manali get very rough. Rest here before continuing."},
+            {id:10, name:"Solang Valley", lat:32.3182, lng:77.1553, description:"Adventure hub! Paragliding, skiing in winter, zorbing.",                                   tags:["scenic"],                   labels:["🏔️ Adventure Sports"],                                   condition:"rough",      condition_label:"Rough — steep climb to valley",          condition_tip:"Unpaved patches on the way up. Bikes and SUVs preferred. Cars manageable with care."},
+            {id:11, name:"Atal Tunnel",   lat:32.3547, lng:77.1723, description:"World's longest highway tunnel at 9km, 3100m altitude. Open year round!",                 tags:["scenic","safe"],            labels:["🏔️ Engineering Marvel","🌙 Open Year Round"],             condition:"smooth",     condition_label:"Smooth — tunnel road is well maintained", condition_tip:"Inside the tunnel is perfectly smooth. Roads approaching it have some rough patches."},
+            {id:12, name:"Rohtang Pass",  lat:32.3713, lng:77.2436, description:"Snow covered pass at 3978m. Permit required. Opens late May.",                             tags:["scenic","permit","unsafe"], labels:["🏔️ Scenic at 3978m","📋 Permit Required","⚠️ Closed in Winter"], condition:"very-rough", condition_label:"Very Rough — high altitude pass road", condition_tip:"Loose gravel, rocks, snow patches. Drive below 15kmph. All vehicles can pass but needs skill."}
+          ]
+        },
+        'delhi-leh': {
+          label:'Delhi → Leh', subtitle:'Delhi → Leh · The Ultimate Ride',
+          distance:'~1020 km', time:'2-3 days', center:[32.5,77.5], zoom:6,
+          seasons:[
+            {cls:"season-best",    title:"🟢 June to September — Only Window",  msg:"Only time roads are open. July-August has best weather. Book stays in advance."},
+            {cls:"season-monsoon", title:"🟡 July to August — Peak but Risky",  msg:"Manali-Leh highway open but landslides possible. Check BRO road status daily."},
+            {cls:"season-closing", title:"🟠 October — Closing Fast",           msg:"Roads close by mid-October. Snow on high passes. Don't risk it after 15 Oct."},
+            {cls:"season-winter",  title:"❄️ November to May — CLOSED",         msg:"All high altitude passes completely closed. No exceptions. Plan for summer only."}
+          ],
+          stops:[
+            {id:101, name:"Delhi",        lat:28.6139, lng:77.2090, description:"Start your journey. Fill fuel, carry cash for toll booths ahead.",                              tags:["fuel","safe"],              labels:["⛽ Fuel Available","🌙 Safe at Night"],               condition:"smooth",     condition_label:"Smooth — NH highway",                      condition_tip:"Well maintained city roads. No issues."},
+            {id:102, name:"Murthal",      lat:29.0167, lng:76.9833, description:"Famous breakfast stop! Best parathas with butter and curd. Dhabas open 24/7.",                 tags:["food","safe","fuel"],        labels:["🍽️ Famous Food Stop","🌙 Safe at Night","⛽ Fuel Available"], condition:"smooth", condition_label:"Smooth — NH1 expressway",                condition_tip:"Excellent road quality. Cruise comfortably."},
+            {id:103, name:"Chandigarh",   lat:30.7333, lng:76.7794, description:"Last major city. Stock up on everything — fuel, medicines, cash, food.",                       tags:["fuel","food","safe"],        labels:["⛽ Fuel Available","🍽️ Good Food","🌙 Safe at Night"],  condition:"smooth",     condition_label:"Smooth — well maintained city roads",      condition_tip:"Good roads through Chandigarh. Easy driving."},
+            {id:104, name:"Mandi",        lat:31.7080, lng:76.9320, description:"Last proper town before mountain roads get serious. Avoid night drive ahead.",                 tags:["fuel","food","unsafe"],      labels:["⛽ Fuel Available","🍽️ Good Food","⚠️ Avoid Night Drive Ahead"], condition:"rough", condition_label:"Rough — mountain terrain starts",        condition_tip:"Roads manageable but get serious after this. Stock up here."},
+            {id:105, name:"Kullu",        lat:31.9579, lng:77.1095, description:"Beas River flows alongside. Scenic but curvy. Drive slow.",                                    tags:["scenic","rough","fuel"],     labels:["🏔️ Beas River Begins","🛣️ Curvy Roads","⛽ Fuel Available"], condition:"rough", condition_label:"Rough — riverside curves ahead",          condition_tip:"Curvy roads alongside Beas river. All vehicles okay with care."},
+            {id:106, name:"Manali",       lat:32.2396, lng:77.1887, description:"Last major town before Leh. Rest well, stock up on fuel, food, medicines. Long stretch ahead.", tags:["scenic","fuel","food"],     labels:["🏔️ Scenic","⛽ Last Easy Fuel","🍽️ Good Food"],          condition:"rough",      condition_label:"Rough — last comfortable stop",            condition_tip:"Town roads fine. REST HERE. Roads ahead are very challenging."},
+            {id:107, name:"Rohtang Pass", lat:32.3713, lng:77.2436, description:"Snow covered pass at 3978m. Permit required. Opens late May.",                                 tags:["scenic","permit","unsafe"],  labels:["🏔️ Scenic at 3978m","📋 Permit Required","⚠️ Closed in Winter"], condition:"very-rough", condition_label:"Very Rough — snow and gravel mix",     condition_tip:"Loose gravel, snow patches. Drive below 15kmph. Manageable with care."},
+            {id:108, name:"Keylong",      lat:32.5667, lng:76.9833, description:"District HQ of Lahaul. Last town with ATM, medical and proper fuel. Stock everything here.",   tags:["fuel","food","safe"],        labels:["⛽ Last ATM & Fuel","🍽️ Good Food","🌙 Safe Town"],      condition:"rough",      condition_label:"Rough — high altitude mountain road",      condition_tip:"Roads manageable. Last proper town. Stock up on everything before continuing."},
+            {id:109, name:"Jispa",        lat:32.6833, lng:77.0167, description:"Beautiful campsite on Bhaga river banks. Network almost gone. Inform family here.",             tags:["scenic","no-network"],       labels:["🏔️ Scenic Campsite","📵 Last Network Point"],            condition:"rough",      condition_label:"Rough — unpaved patches ahead",            condition_tip:"Mix of paved and unpaved road. Bikes and SUVs comfortable. Cars need careful driving."},
+            {id:110, name:"Baralacha La", lat:32.7833, lng:77.3833, description:"High altitude pass at 4890m. Altitude sickness possible. Drive slow, no stopping long.",        tags:["scenic","unsafe"],           labels:["🏔️ Pass at 4890m","⚠️ Altitude Sickness Risk"],          condition:"very-rough", condition_label:"Very Rough — rocky high altitude pass",    condition_tip:"Rocky terrain at 4890m. Drive very slow. All vehicles can pass but altitude is the real challenge."},
+            {id:111, name:"Sarchu",       lat:32.9167, lng:77.6333, description:"HP-Ladakh border camping ground at 4290m. Cold nights even in summer. Carry warm clothes.",     tags:["scenic","unsafe"],           labels:["🏔️ HP-Ladakh Border","⚠️ Very Cold Nights"],             condition:"very-rough", condition_label:"Very Rough — gravel and rocky stretches",  condition_tip:"Challenging terrain but passable. The cold and altitude are bigger concerns than road quality."},
+            {id:112, name:"Gata Loops",   lat:33.0833, lng:77.6167, description:"Famous 21 hairpin bends climbing to Nakee La. Thrilling but scary. No guardrails in sections.", tags:["scenic","unsafe","rough"],   labels:["🏔️ 21 Hairpin Bends","⚠️ No Guardrails","🛣️ Rough Patches"], condition:"very-rough", condition_label:"Very Rough — 21 hairpin bends no guardrails", condition_tip:"Extremely technical driving. Go one vehicle at a time on bends. Bikes preferred."},
+            {id:113, name:"Pang",         lat:33.1667, lng:77.6500, description:"Temporary settlement at 4600m. Last fuel and food before Leh. Very limited options.",           tags:["fuel","food","unsafe"],      labels:["⛽ Last Fuel Before Leh","🍽️ Basic Food Only","⚠️ High Altitude"], condition:"rough", condition_label:"Rough — high plateau road",             condition_tip:"Flat but rough plateau road. Manageable for all vehicles. Altitude is main challenge here."},
+            {id:114, name:"More Plains",  lat:33.3500, lng:77.7167, description:"Surreal flat moonscape at 4500m. One of the most unique stretches on earth. No network.",       tags:["scenic","no-network"],       labels:["🏔️ Surreal Moonscape","📵 No Network"],                  condition:"smooth",     condition_label:"Smooth — flat plateau highway",            condition_tip:"Surprisingly good flat road. Enjoy the moonscape. Winds can be strong."},
+            {id:115, name:"Tanglang La",  lat:33.4833, lng:77.7667, description:"Second highest motorable pass at 5328m. Extreme altitude. Headache common. Don't stop long.",   tags:["scenic","unsafe"],           labels:["🏔️ Pass at 5328m","⚠️ Extreme Altitude"],                condition:"very-rough", condition_label:"Very Rough — extreme altitude pass",       condition_tip:"Rocky and uneven at 5328m. Don't stop engine for long. Drive through steadily."},
+            {id:116, name:"Leh",          lat:34.1526, lng:77.5771, description:"You made it to Leh! Acclimatize for 2 days before exploring. Visit Leh Palace, Pangong Lake.",   tags:["scenic","fuel","food","safe"], labels:["🏔️ You Made It!","⛽ Fuel Available","🍽️ Good Food","🌙 Safe City"], condition:"smooth", condition_label:"Smooth — well maintained town roads", condition_tip:"Leh town has good roads. Relax — you've earned it!"}
+          ]
+        },
+        'delhi-shimla': {
+          label:'Delhi → Shimla', subtitle:'Delhi → Shimla · Queen of Hills',
+          distance:'~350 km', time:'7-8 hrs', center:[30.5,77.0], zoom:8,
+          seasons:[
+            {cls:"season-best",    title:"🟢 March to June — Best Time",     msg:"Pleasant weather. Cherry blossoms in March-April. Roads clear and beautiful."},
+            {cls:"season-monsoon", title:"🟡 July to September — Monsoon",   msg:"Lush green but landslide risk on ghat sections. Check road status before travelling."},
+            {cls:"season-closing", title:"🟠 October to November — Pleasant", msg:"Cool crisp weather. Perfect for road trip. Some snow possible in November."},
+            {cls:"season-winter",  title:"❄️ December to February — Snowy",  msg:"Snow in Shimla and Kufri. Roads can be icy. Carry chains if going to higher areas."}
+          ],
+          stops:[
+            {id:401, name:"Delhi",      lat:28.6139, lng:77.2090, description:"Start early to avoid city traffic. NH44 to NH48 — good expressway ahead.",                  tags:["fuel","safe","food"],       labels:["⛽ Fuel Available","🌙 Safe","🍽️ Good Food"],            condition:"smooth",     condition_label:"Smooth — NH expressway",                   condition_tip:"Well maintained city roads. Start before 7am to beat traffic."},
+            {id:402, name:"Ambala",     lat:30.3782, lng:76.7767, description:"Major junction city. Good fuel and food options. NH5 to Shimla begins here.",                tags:["fuel","food","safe"],       labels:["⛽ Fuel Available","🍽️ Good Food","🌙 Safe"],            condition:"smooth",     condition_label:"Smooth — good NH roads",                   condition_tip:"Well maintained highway. Easy comfortable driving."},
+            {id:403, name:"Chandigarh", lat:30.7333, lng:76.7794, description:"Last major city before hills. Stock up on everything here.",                                 tags:["fuel","food","safe"],       labels:["⛽ Fuel Available","🍽️ Good Food","🌙 Safe at Night"],  condition:"smooth",     condition_label:"Smooth — well maintained city roads",      condition_tip:"Good roads through Chandigarh. Last flat comfortable stretch."},
+            {id:404, name:"Kalka",      lat:30.8388, lng:76.9478, description:"Gateway to Shimla. Famous toy train starts here. Roads start climbing from Kalka.",          tags:["scenic","food","fuel"],     labels:["🏔️ Toy Train Station","🍽️ Good Dhabas","⛽ Fuel Available"], condition:"rough",  condition_label:"Rough — mountain roads begin",             condition_tip:"Roads get steep and winding from here. All vehicles manageable. Drive below 40kmph."},
+            {id:405, name:"Solan",      lat:30.9045, lng:77.0967, description:"Mushroom city of India! Good food and fuel. Scenic stretch begins here.",                    tags:["food","fuel","scenic"],     labels:["🍽️ Famous for Mushrooms","⛽ Fuel Available","🏔️ Scenic"], condition:"rough",  condition_label:"Rough — hilly winding road",               condition_tip:"Winding mountain roads but well maintained. All vehicles okay. Enjoy the scenery."},
+            {id:406, name:"Shimla",     lat:31.1048, lng:77.1734, description:"Queen of Hills! Mall Road, Christ Church, Jakhu Temple. Parking is a challenge in peak season.", tags:["scenic","food","safe"],  labels:["🏔️ Queen of Hills","🍽️ Famous Mall Road","🌙 Safe City"], condition:"rough",  condition_label:"Rough — steep narrow town roads",          condition_tip:"Shimla town roads are very steep and narrow. Park at lower areas and walk or take ropeway."},
+            {id:407, name:"Kufri",      lat:31.0989, lng:77.2647, description:"Snow point near Shimla! Horse riding, skiing in winter. 16km from Shimla.",                  tags:["scenic","unsafe"],          labels:["🏔️ Snow Point","⚠️ Slippery in Winter"],              condition:"rough",      condition_label:"Rough — steep climb to Kufri",             condition_tip:"Road is steep and narrow. Manageable in good weather. Avoid in heavy snowfall."},
+            {id:408, name:"Chail",      lat:30.9667, lng:77.2000, description:"Highest cricket ground in the world! Chail Palace. Peaceful alternative to crowded Shimla.", tags:["scenic","safe"],            labels:["🏔️ Highest Cricket Ground","🌙 Peaceful & Safe"],      condition:"rough",      condition_label:"Rough — narrow forest road",               condition_tip:"Narrow but scenic road through dense forest. All vehicles manageable. Drive slow and enjoy."}
+          ]
+        },
+        'pune-goa': {
+          label:'Pune → Goa', subtitle:'Pune → Goa · Coastal Highway',
+          distance:'~450 km', time:'9-11 hrs', center:[16.8,74.0], zoom:7,
+          seasons:[
+            {cls:"season-best",    title:"🟢 November to February — Best Time", msg:"Cool weather, dry roads, beach season in full swing."},
+            {cls:"season-monsoon", title:"🟡 June to September — Monsoon",      msg:"Amboli Ghat gets extremely foggy. Landslide risk. Check road status."},
+            {cls:"season-closing", title:"🟠 October — Transition",             msg:"Monsoon fading. Roads still wet. Good time if you don't mind some rain."},
+            {cls:"season-winter",  title:"☀️ March to May — Hot Summer",        msg:"Very hot and humid. Start early morning. Carry extra water."}
+          ],
+          stops:[
+            {id:201, name:"Pune",        lat:18.5204, lng:73.8567, description:"Start here. Fill up fuel, grab snacks. NH48 begins — smooth expressway ahead.",              tags:["fuel","safe","food"],            labels:["⛽ Fuel Available","🌙 Safe at Night","🍽️ Good Food"],    condition:"smooth",     condition_label:"Smooth — expressway quality",              condition_tip:"Excellent NH48 expressway. Cruise at highway speed comfortably."},
+            {id:202, name:"Satara",      lat:17.6805, lng:74.0183, description:"First major stop. Famous for strawberries and Kaas Plateau nearby. Good dhabas.",            tags:["food","scenic","fuel"],          labels:["🍽️ Good Food","🏔️ Scenic Region","⛽ Fuel Available"],    condition:"smooth",     condition_label:"Smooth — NH continues well",               condition_tip:"Good road quality. Easy driving. Ghat section starts after this."},
+            {id:203, name:"Kolhapur",    lat:16.7050, lng:74.2433, description:"Famous for Kolhapuri chappal and spicy misal. Stock up on fuel before ghat section.",        tags:["food","fuel","safe"],            labels:["🍽️ Famous Food","⛽ Fuel Available","🌙 Safe at Night"],  condition:"smooth",     condition_label:"Smooth — good city roads",                 condition_tip:"Good roads through Kolhapur. Roads get ghattier after this."},
+            {id:204, name:"Amboli Ghat", lat:15.9583, lng:74.0000, description:"Stunning Western Ghats stretch. Fog heavy in monsoon. Drive very slow. Zero visibility possible.", tags:["scenic","unsafe","no-network"], labels:["🏔️ Stunning Ghats","⚠️ Foggy in Monsoon","📵 Weak Network"], condition:"rough", condition_label:"Rough — steep ghat with sharp turns",   condition_tip:"Narrow ghat road with sharp hairpins. Manageable for all vehicles. In monsoon fog is the real danger."},
+            {id:205, name:"Sawantwadi",  lat:15.9043, lng:73.8181, description:"Last Maharashtra town. Known for wooden toys. Goa border just ahead.",                       tags:["food","fuel","safe"],            labels:["🍽️ Local Food","⛽ Fuel Available","🌙 Safe Stop"],        condition:"smooth",     condition_label:"Smooth — good roads to Goa border",        condition_tip:"Roads improve significantly after the ghats. Easy riding to Goa."},
+            {id:206, name:"Panaji",      lat:15.4909, lng:73.8278, description:"Goa capital. Gorgeous Portuguese architecture, Mandovi river views. You've arrived!",        tags:["scenic","food","safe"],          labels:["🏔️ Scenic City","🍽️ Great Food","🌙 Safe"],               condition:"smooth",     condition_label:"Smooth — well maintained Goa roads",       condition_tip:"Goa has good roads. Narrow in old city areas but manageable."},
+            {id:207, name:"Baga Beach",  lat:15.5552, lng:73.7516, description:"Most popular beach stretch. Crowded but vibrant. Watch for rash driving at night.",          tags:["scenic","unsafe"],               labels:["🏔️ Beautiful Beach","⚠️ Careful at Night"],               condition:"smooth",     condition_label:"Smooth — beach roads are fine",            condition_tip:"Roads are good but get very crowded. Watch for pedestrians at night."},
+            {id:208, name:"Colva Beach", lat:15.2793, lng:73.9121, description:"Quieter southern Goa beach. Cleaner, less crowded. Great for bikers who want peace.",        tags:["scenic","safe"],                 labels:["🏔️ Scenic & Peaceful","🌙 Safer than North Goa"],         condition:"smooth",     condition_label:"Smooth — quiet beach roads",               condition_tip:"Good roads, less traffic. Best riding experience in Goa."}
+          ]
+        },
+        'mumbai-goa': {
+          label:'Mumbai → Goa', subtitle:'Mumbai → Goa · Coastal Highway NH66',
+          distance:'~600 km', time:'10-12 hrs', center:[17.5,73.5], zoom:7,
+          seasons:[
+            {cls:"season-best",    title:"🟢 November to February — Best Time", msg:"Perfect weather, NH66 is a dream ride. Beach season at its peak."},
+            {cls:"season-monsoon", title:"🟡 June to September — Monsoon",      msg:"NH66 is beautiful but roads get slippery. Some sections prone to landslides near ghats."},
+            {cls:"season-closing", title:"🟠 October — Post Monsoon",           msg:"Roads drying up. Beautiful green scenery. Good time to travel."},
+            {cls:"season-winter",  title:"☀️ March to May — Hot & Humid",       msg:"Very humid near coast. Start early. Carry extra water. Still a good ride."}
+          ],
+          stops:[
+            {id:501, name:"Mumbai",         lat:19.0760, lng:72.8777, description:"Start from Vashi or Panvel to skip city traffic. NH66 coastal highway begins here.",        tags:["fuel","safe","food"],           labels:["⛽ Fuel Available","🌙 Safe","🍽️ Good Food"],            condition:"smooth",     condition_label:"Smooth — NH66 coastal highway",            condition_tip:"Good highway quality. Start early to avoid Mumbai traffic. Panvel is the real starting point."},
+            {id:502, name:"Panvel",          lat:18.9894, lng:73.1175, description:"Real start point for most bikers. NH66 begins properly here. Last big city fuel stop.",    tags:["fuel","food","safe"],           labels:["⛽ Fuel Available","🍽️ Good Food","🌙 Safe"],            condition:"smooth",     condition_label:"Smooth — NH66 starts well",                condition_tip:"Excellent road quality begins here. Cruise comfortably on the coastal highway."},
+            {id:503, name:"Mahad",           lat:18.0681, lng:73.4177, description:"Savitri river crossing. Scenic ghats nearby. Watch for heavy trucks on this stretch.",     tags:["food","fuel","scenic"],         labels:["🍽️ Good Dhabas","⛽ Fuel Available","🏔️ Scenic Ghats"],  condition:"smooth",     condition_label:"Smooth — good NH66",                       condition_tip:"Road quality is good. Watch for heavy trucks especially near the river bridge."},
+            {id:504, name:"Chiplun",         lat:17.5333, lng:73.5167, description:"Beautiful Vashishti river town. Famous for mangoes. Scenic stretch ahead.",                tags:["food","scenic","fuel"],         labels:["🍽️ Famous Mangoes","🏔️ Scenic River","⛽ Fuel Available"], condition:"smooth",   condition_label:"Smooth — excellent coastal highway",       condition_tip:"One of the best stretches of NH66. Smooth road, beautiful scenery. Enjoy the ride."},
+            {id:505, name:"Ratnagiri",       lat:16.9944, lng:73.3000, description:"Alphonso mango capital! Ratnadurg Fort nearby. Good overnight stop if needed.",            tags:["food","fuel","safe","scenic"],  labels:["🍽️ Alphonso Mangoes","⛽ Fuel Available","🌙 Safe","🏔️ Fort Views"], condition:"smooth", condition_label:"Smooth — well maintained NH",             condition_tip:"Good roads through Ratnagiri. Great place to rest and eat."},
+            {id:506, name:"Vengurla",        lat:15.8593, lng:73.6330, description:"Last major Maharashtra town before Goa. Beautiful beaches nearby. Almost there!",          tags:["food","fuel","safe","scenic"],  labels:["🍽️ Good Food","⛽ Fuel Available","🌙 Safe","🏔️ Scenic Beach"], condition:"smooth", condition_label:"Smooth — coastal road continues well",    condition_tip:"Road quality remains good. Beautiful coastal views. Last fuel before Goa border."},
+            {id:507, name:"Panaji",          lat:15.4909, lng:73.8278, description:"Goa capital! Portuguese architecture, Mandovi river, casino boats. You've arrived!",      tags:["scenic","food","safe"],         labels:["🏔️ Scenic City","🍽️ Great Food","🌙 Safe"],             condition:"smooth",     condition_label:"Smooth — well maintained Goa roads",       condition_tip:"Goa roads are good. Enjoy the laid back coastal vibe!"},
+            {id:508, name:"Calangute Beach", lat:15.5440, lng:73.7552, description:"King of beaches in North Goa! Most happening beach. Water sports, shacks, nightlife.",   tags:["scenic","unsafe"],              labels:["🏔️ King of Beaches","⚠️ Crowded at Night"],             condition:"smooth",     condition_label:"Smooth — beach roads fine",                condition_tip:"Road quality good but extremely crowded in peak season. Watch for drunk drivers at night."},
+            {id:509, name:"Palolem Beach",   lat:15.0100, lng:74.0232, description:"Southernmost popular beach. Crescent shaped, calm waters. Quieter than North Goa.",       tags:["scenic","safe"],                labels:["🏔️ Crescent Beach","🌙 Calm & Safe"],                   condition:"smooth",     condition_label:"Smooth — South Goa roads",                 condition_tip:"Good roads, less traffic. South Goa is the best for relaxed biking experience."}
+          ]
+        },
+        'bangalore-coorg': {
+          label:'Bangalore → Coorg', subtitle:'Bangalore → Coorg · Coffee Country',
+          distance:'~270 km', time:'5-6 hrs', center:[12.4,76.5], zoom:8,
+          seasons:[
+            {cls:"season-best",    title:"🟢 October to March — Best Time",  msg:"Pleasant weather, coffee harvest season. Roads dry and clear."},
+            {cls:"season-monsoon", title:"🟡 June to September — Monsoon",   msg:"Coorg gets heavy rainfall. Waterfalls are stunning but roads get slippery."},
+            {cls:"season-closing", title:"🟠 April to May — Hot & Humid",    msg:"Getting hot. Start early. Carry water. Still driveable."},
+            {cls:"season-winter",  title:"❄️ December to January — Misty",   msg:"Misty mornings, cool nights. Best season for Coorg atmosphere."}
+          ],
+          stops:[
+            {id:301, name:"Bangalore",   lat:12.9716, lng:77.5946, description:"Start from Silk Board or Mysore Road. Heavy traffic till city outskirts. Start early morning.", tags:["fuel","safe","food"],           labels:["⛽ Fuel Available","🌙 Safe","🍽️ Good Food"],             condition:"smooth",     condition_label:"Smooth — city roads heavy traffic",        condition_tip:"Roads are good but traffic is heavy. Start before 6am to avoid Bangalore traffic."},
+            {id:302, name:"Mysore",      lat:12.2958, lng:76.6394, description:"Stop at the famous Mysore Palace area. Great idli-dosa breakfast options. NH275 continues.",    tags:["food","scenic","fuel"],          labels:["🍽️ Famous Breakfast","🏔️ Mysore Palace","⛽ Fuel Available"], condition:"smooth", condition_label:"Smooth — excellent NH275",               condition_tip:"Very good road quality all the way from Bangalore. Easy comfortable drive."},
+            {id:303, name:"Hunsur",      lat:12.3003, lng:76.2917, description:"Gateway to Coorg region. Last town with full fuel and ATM access before hills.",                tags:["fuel","food","safe"],            labels:["⛽ Last Major Fuel","🍽️ Good Dhabas","🌙 Safe Stop"],     condition:"smooth",     condition_label:"Smooth — roads still good here",           condition_tip:"Last stretch of flat good road. Roads get hilly and winding after Hunsur."},
+            {id:304, name:"Nagarhole",   lat:12.1726, lng:76.1162, description:"Nagarhole National Park stretch. Watch for wildlife crossing at dawn/dusk. No overtaking.",     tags:["scenic","unsafe"],               labels:["🏔️ Wildlife Zone","⚠️ Animal Crossing Risk"],             condition:"smooth",     condition_label:"Smooth — forest road drive slow",          condition_tip:"Road quality is good but wildlife crossing is real. Drive below 40kmph through forest."},
+            {id:305, name:"Kushalnagar", lat:12.4584, lng:75.9643, description:"Tibetan settlement nearby — Bylakuppe. Great momos! Last ATM before Madikeri.",                 tags:["food","fuel","safe"],            labels:["🍽️ Try Local Momos","⛽ Fuel Available","🌙 Safe"],        condition:"rough",      condition_label:"Rough — hilly roads begin",                condition_tip:"Roads get winding after Kushalnagar. Manageable for all vehicles. Beautiful scenery."},
+            {id:306, name:"Madikeri",    lat:12.4244, lng:75.7382, description:"Coorg district HQ. Beautiful misty town. Visit Raja's Seat for sunset. Coffee plantations everywhere.", tags:["scenic","food","safe"],   labels:["🏔️ Misty & Scenic","🍽️ Coorg Coffee","🌙 Safe Town"],    condition:"rough",      condition_label:"Rough — steep winding town roads",         condition_tip:"Madikeri town roads are narrow and steep. Manageable but go slow."},
+            {id:307, name:"Abbey Falls", lat:12.4167, lng:75.7333, description:"Beautiful waterfall 8km from Madikeri. Slippery roads in monsoon. Must visit.",                 tags:["scenic","unsafe"],               labels:["🏔️ Stunning Waterfall","⚠️ Slippery in Monsoon"],         condition:"rough",      condition_label:"Rough — narrow forest road to falls",      condition_tip:"Narrow road with some unpaved patches. All vehicles okay in dry weather. Slippery in monsoon."},
+            {id:308, name:"Talacauvery", lat:12.3833, lng:75.4833, description:"Origin of river Cauvery. Sacred site. Road gets narrow and steep. No network beyond this point.", tags:["scenic","no-network","unsafe"], labels:["🏔️ Sacred & Scenic","📵 No Network","⚠️ Steep Roads"],   condition:"very-rough", condition_label:"Very Rough — steep narrow climb",          condition_tip:"Very narrow road with steep gradient. Small cars and bikes preferred. Large vehicles should avoid."}
+          ]
+        },
+        'chennai-ooty': {
+          label:'Chennai → Ooty', subtitle:'Chennai → Ooty · Nilgiri Hills',
+          distance:'~550 km', time:'9-11 hrs', center:[12.0,78.5], zoom:7,
+          seasons:[
+            {cls:"season-best",    title:"🟢 October to March — Best Time",  msg:"Perfect weather for Nilgiris. Cool and misty. Roads clear. Best time to visit."},
+            {cls:"season-monsoon", title:"🟡 June to September — Monsoon",   msg:"Heavy rain in Nilgiris. Ghat roads get slippery. Beautiful but drive carefully."},
+            {cls:"season-closing", title:"🟠 April to May — Hot at foothills", msg:"Hot and humid till Mettupalayam. Cool once you reach the ghats. Start early."},
+            {cls:"season-winter",  title:"❄️ December to January — Peak Season", msg:"Most crowded time. Book hotels well in advance. Roads get very busy."}
+          ],
+          stops:[
+            {id:601, name:"Chennai",      lat:13.0827, lng:80.2707, description:"Start from Chennai. NH44 towards Bangalore. Start early to beat city traffic.",            tags:["fuel","safe","food"],            labels:["⛽ Fuel Available","🌙 Safe","🍽️ Good Food"],            condition:"smooth",     condition_label:"Smooth — NH44 expressway",                 condition_tip:"Well maintained expressway. Start before 7am to avoid Chennai traffic."},
+            {id:602, name:"Vellore",      lat:12.9165, lng:79.1325, description:"Famous for Vellore Fort and CMC Hospital. Good fuel and food stop on NH44.",               tags:["food","fuel","safe"],            labels:["🍽️ Good Food","⛽ Fuel Available","🌙 Safe"],            condition:"smooth",     condition_label:"Smooth — good NH44",                       condition_tip:"Excellent road quality. Easy comfortable driving."},
+            {id:603, name:"Krishnagiri",  lat:12.5186, lng:78.2137, description:"Mango belt of Tamil Nadu. Famous for Krishnagiri dam and mangoes. Good pit stop.",         tags:["food","fuel","scenic"],          labels:["🍽️ Famous Mangoes","⛽ Fuel Available","🏔️ Scenic Dam"],  condition:"smooth",     condition_label:"Smooth — NH continues well",               condition_tip:"Good road quality. Great place to grab mangoes in season."},
+            {id:604, name:"Dharmapuri",   lat:12.1278, lng:78.1580, description:"Junction point. Take the route via Hogenakkal or direct to Salem. Waterfalls nearby.",    tags:["food","fuel","scenic"],          labels:["🍽️ Good Dhabas","⛽ Fuel Available","🏔️ Scenic Waterfalls"], condition:"smooth", condition_label:"Smooth — good state highway",              condition_tip:"Road quality good. Worth a detour to Hogenakkal waterfalls if time permits."},
+            {id:605, name:"Salem",        lat:11.6643, lng:78.1460, description:"Steel city of Tamil Nadu. Good food and fuel. Junction for Ooty via Yercaud ghat.",        tags:["food","fuel","safe"],            labels:["🍽️ Good Food","⛽ Fuel Available","🌙 Safe City"],        condition:"smooth",     condition_label:"Smooth — well maintained city roads",      condition_tip:"Good roads through Salem. Stock up before the ghat section begins."},
+            {id:606, name:"Mettupalayam", lat:11.2977, lng:76.9336, description:"Foothills of Nilgiris. Toy train to Ooty starts here. Ghat road begins — drive carefully.", tags:["scenic","fuel","food"],         labels:["🏔️ Nilgiris Gateway","⛽ Fuel Available","🍽️ Good Food"], condition:"rough",   condition_label:"Rough — ghat section begins",              condition_tip:"Roads get steep and winding from here. All vehicles manageable. Drive below 30kmph on ghats."},
+            {id:607, name:"Coonoor",      lat:11.3530, lng:76.7959, description:"Beautiful tea garden town before Ooty. Less crowded than Ooty. Great viewpoints.",         tags:["scenic","food","safe"],          labels:["🏔️ Tea Gardens","🍽️ Good Food","🌙 Safe Town"],          condition:"rough",      condition_label:"Rough — steep mountain roads",             condition_tip:"Winding mountain roads but well maintained. All vehicles okay. Beautiful tea estate views."},
+            {id:608, name:"Ooty",         lat:11.4102, lng:76.6950, description:"Queen of Hill Stations! Botanical gardens, Ooty lake, tea museum. Very crowded in peak season.", tags:["scenic","food","safe"],     labels:["🏔️ Queen of Hills","🍽️ Famous Nilgiri Tea","🌙 Safe"],  condition:"rough",      condition_label:"Rough — steep narrow town roads",          condition_tip:"Ooty town roads are very steep and narrow. Park outside and use local transport. Worth every bit!"}
+          ]
+        },
+        'hyderabad-hampi': {
+          label:'Hyderabad → Hampi', subtitle:'Hyderabad → Hampi · Heritage Route',
+          distance:'~380 km', time:'7-8 hrs', center:[16.0,77.5], zoom:7,
+          seasons:[
+            {cls:"season-best",    title:"🟢 October to February — Best Time", msg:"Cool and pleasant. Perfect for exploring Hampi ruins. Roads dry and clear."},
+            {cls:"season-monsoon", title:"🟡 June to September — Monsoon",     msg:"Hampi looks stunning in green but some roads can get waterlogged. Check status."},
+            {cls:"season-closing", title:"🟠 March to May — Hot",              msg:"Very hot in Hampi region. Start very early. Carry lots of water. Avoid afternoon heat."},
+            {cls:"season-winter",  title:"❄️ December to January — Perfect",   msg:"Best time! Cool mornings, perfect for exploring ruins. Book hotels early."}
+          ],
+          stops:[
+            {id:701, name:"Hyderabad",       lat:17.3850, lng:78.4867, description:"Start from Hyderabad. NH44 southward. Famous for biryani — eat well before the ride!",  tags:["fuel","safe","food"],           labels:["⛽ Fuel Available","🌙 Safe","🍽️ Famous Biryani"],       condition:"smooth",     condition_label:"Smooth — NH44 expressway",                 condition_tip:"Well maintained expressway. Start early to beat Hyderabad traffic."},
+            {id:702, name:"Kurnool",          lat:15.8281, lng:78.0373, description:"Gateway to Nallamala forest. Tungabhadra river nearby. Good fuel and food stop.",       tags:["food","fuel","safe"],           labels:["🍽️ Good Food","⛽ Fuel Available","🌙 Safe"],            condition:"smooth",     condition_label:"Smooth — good NH roads",                   condition_tip:"Good road quality. Easy comfortable drive. Stock up before the forest stretch."},
+            {id:703, name:"Nandyal",          lat:15.4786, lng:78.4836, description:"Scenic town near Nallamala hills. Watch for wildlife on road at night.",                tags:["scenic","unsafe","fuel"],       labels:["🏔️ Scenic Hills","⚠️ Wildlife at Night","⛽ Fuel Available"], condition:"smooth", condition_label:"Smooth — decent state highway",            condition_tip:"Road quality decent. Be careful at night — wildlife crossing common near forest patches."},
+            {id:704, name:"Adoni",            lat:15.6270, lng:77.2742, description:"Last major town before Hampi. Good fuel stop. Roads get more rural after this.",        tags:["fuel","food","safe"],           labels:["⛽ Fuel Available","🍽️ Good Dhabas","🌙 Safe"],          condition:"smooth",     condition_label:"Smooth — state highway",                   condition_tip:"Road quality decent. Last comfortable town before Hampi area."},
+            {id:705, name:"Hospet",           lat:15.2689, lng:76.3909, description:"Gateway to Hampi. Base town for exploring Hampi ruins. Good hotels and food.",          tags:["food","fuel","safe"],           labels:["🍽️ Good Food","⛽ Fuel Available","🌙 Safe Base Town"],   condition:"smooth",     condition_label:"Smooth — good town roads",                 condition_tip:"Good roads in Hospet. Park here and take local transport to Hampi ruins."},
+            {id:706, name:"Hampi",             lat:15.3350, lng:76.4600, description:"UNESCO World Heritage Site! Ancient Vijayanagara ruins. Boulder landscape is surreal. A must visit!", tags:["scenic","safe"], labels:["🏔️ UNESCO Heritage","🌙 Safe to Explore"],              condition:"rough",      condition_label:"Rough — unpaved paths inside ruins",       condition_tip:"Roads to Hampi are fine but inside ruins it's unpaved. Bike is the best way to explore."},
+            {id:707, name:"Tungabhadra Dam",   lat:15.2694, lng:76.3345, description:"Massive dam on Tungabhadra river. Beautiful evening views. Good picnic spot near Hampi.", tags:["scenic","safe"],             labels:["🏔️ Scenic Dam","🌙 Safe Spot"],                          condition:"smooth",     condition_label:"Smooth — well maintained dam road",        condition_tip:"Good roads to the dam. Best visited at sunset. Parking available."}
+          ]
+        },
+        'mumbai-pune': {
+          label:'Mumbai → Pune', subtitle:'Mumbai → Pune · Expressway Classic',
+          distance:'~150 km', time:'2.5-3 hrs', center:[18.8,73.4], zoom:9,
+          seasons:[
+            {cls:"season-best",    title:"🟢 October to February — Best Time", msg:"Pleasant weather. Perfect weekend ride. Roads clear and fast."},
+            {cls:"season-monsoon", title:"🟡 June to September — Monsoon",     msg:"Expressway ghat section gets foggy. Beautiful but drive carefully. Speed limits strictly enforced."},
+            {cls:"season-closing", title:"🟠 March to May — Hot",              msg:"Hot but manageable. Start early morning for a pleasant ride."},
+            {cls:"season-winter",  title:"❄️ December to January — Pleasant",  msg:"Cool and pleasant. Best time for this route. Very popular weekend ride."}
+          ],
+          stops:[
+            {id:801, name:"Mumbai",    lat:19.0760, lng:72.8777, description:"Start from Sion or Eastern Express Highway. NH48 expressway is the fastest route.",      tags:["fuel","safe","food"],            labels:["⛽ Fuel Available","🌙 Safe","🍽️ Good Food"],            condition:"smooth",     condition_label:"Smooth — expressway quality",              condition_tip:"Mumbai Pune Expressway is excellent. But very busy on weekends. Start early."},
+            {id:802, name:"Khopoli",   lat:18.7667, lng:73.3500, description:"Last exit before the famous Expressway ghats. Good fuel stop. Waterfalls nearby in monsoon.", tags:["fuel","food","scenic"],         labels:["⛽ Fuel Available","🍽️ Good Food","🏔️ Scenic Waterfalls"], condition:"smooth",   condition_label:"Smooth — expressway continues",            condition_tip:"Well maintained expressway. Last comfortable fuel stop before the ghat section."},
+            {id:803, name:"Khandala",  lat:18.7667, lng:73.3833, description:"Famous hill station! Tiger's Leap viewpoint is stunning. Cool weather, misty in monsoon.", tags:["scenic","food","safe"],          labels:["🏔️ Tiger's Leap View","🍽️ Good Food","🌙 Safe"],        condition:"rough",      condition_label:"Rough — ghat section, steep descent",      condition_tip:"Expressway ghat section is well maintained but steep. Drive carefully. Beautiful views."},
+            {id:804, name:"Lonavala",  lat:18.7537, lng:73.4068, description:"Famous for chikki! Bhushi dam, Pavna lake nearby. Very crowded on weekends.",            tags:["food","scenic","safe"],          labels:["🍽️ Famous Chikki","🏔️ Scenic Lakes","🌙 Safe Town"],    condition:"smooth",     condition_label:"Smooth — well maintained town roads",      condition_tip:"Good roads in Lonavala. Extremely crowded on weekends. Avoid peak hours."},
+            {id:805, name:"Talegaon",  lat:18.7333, lng:73.6667, description:"Quiet town before Pune. Old NH4 route goes through here. Scenic grape farms.",           tags:["food","fuel","scenic"],          labels:["🍽️ Good Dhabas","⛽ Fuel Available","🏔️ Grape Farms"],   condition:"smooth",     condition_label:"Smooth — good state road",                 condition_tip:"Road quality good. Nice stretch through grape farm country. Peaceful drive."},
+            {id:806, name:"Pune",      lat:18.5204, lng:73.8567, description:"Oxford of the East! Shaniwar Wada, Aga Khan Palace, amazing food scene. You've arrived!", tags:["scenic","food","safe","fuel"],   labels:["🏔️ Historic City","🍽️ Amazing Food Scene","🌙 Safe","⛽ Fuel Available"], condition:"smooth", condition_label:"Smooth — well maintained city roads", condition_tip:"Pune has good roads. Traffic can be heavy in peak hours. Park and explore on foot."}
+          ]
+        }
+      };
+
+      var currentCorridorId = 'delhi-manali';
+      var stops = [];
+      var markers = [];
+      var currentStopId = null;
+      var routePolyline = null;
+      var routePolylineBg = null;
+      var routeHighlightMarkers = [];
+      var fullRouteLayer = null;
+      var month = new Date().getMonth();
+      var isWinter = false;
+      var seasonsVisible = false;
+
+      function buildSeasons(seasonData) {
+        var ci = month >= 2 && month <= 5 ? 0 : month >= 6 && month <= 8 ? 1 : month >= 9 && month <= 10 ? 2 : 3;
+        isWinter = (ci === 3);
+        var cur = seasonData[ci];
+        document.getElementById('current-season-banner').innerHTML =
+          '<div class="season-banner ' + cur.cls + ' current-season"><div class="season-title">📍 Now: ' + cur.title + '</div><div>' + cur.msg + '</div></div>';
+        var allHTML = '<div style="font-size:11px;color:#444;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">All seasons</div>';
+        seasonData.forEach(function(s, i) {
+          allHTML += '<div class="season-banner ' + s.cls + (i === ci ? ' current-season' : '') + '"><div class="season-title">' + s.title + (i === ci ? ' ← Now' : '') + '</div><div>' + s.msg + '</div></div>';
+        });
+        document.getElementById('all-seasons').innerHTML = allHTML;
+        document.getElementById('all-seasons').style.display = 'none';
+        seasonsVisible = false;
+        document.querySelector('.season-toggle').innerHTML = '📅 View all seasons ▾';
+      }
+
+      function toggleSeasons() {
+        seasonsVisible = !seasonsVisible;
+        document.getElementById('all-seasons').style.display = seasonsVisible ? 'block' : 'none';
+        document.querySelector('.season-toggle').innerHTML = seasonsVisible ? '📅 Hide seasons ▴' : '📅 View all seasons ▾';
+      }
+
+      var map = L.map('map', { zoomControl: false }).setView([20.5, 78.9], 5);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+
+      function getBaseColor(stop) {
+        var tags = stop.tags;
+        if (stop.name === 'Rohtang Pass' || stop.name === 'Tanglang La' || stop.name === 'Baralacha La') return isWinter ? '#e74c3c' : '#e67e22';
+        if (tags.indexOf('unsafe') !== -1 && tags.indexOf('scenic') === -1) return '#e67e22';
+        if (tags.indexOf('no-network') !== -1) return '#e67e22';
+        if (tags.indexOf('scenic') !== -1) return '#2ecc71';
+        if (tags.indexOf('food') !== -1) return '#f1c40f';
+        return '#4fc3f7';
+      }
+      function getWeatherColor(temp, description) {
+        var desc = description.toLowerCase();
+        if (temp <= 2)                         return '#e74c3c';
+        if (desc.indexOf('snow') !== -1)       return '#e74c3c';
+        if (desc.indexOf('thunder') !== -1)    return '#e74c3c';
+        if (desc.indexOf('heavy rain') !== -1) return '#e67e22';
+        if (desc.indexOf('rain') !== -1)       return '#e67e22';
+        return null;
+      }
+      function makeIcon(color) {
+        return L.divIcon({ className: '', html: '<div class="rs-marker" style="background:' + color + ';"></div>', iconSize: [16,16], iconAnchor: [8,8] });
+      }
+      function makeSpecialIcon(type) {
+        var cls = type === 'entry' ? 'rs-marker-entry' : 'rs-marker-exit';
+        var bg  = type === 'entry' ? '#2ecc71' : '#e74c3c';
+        return L.divIcon({ className: '', html: '<div class="' + cls + '" style="background:' + bg + ';"></div>', iconSize: [20,20], iconAnchor: [10,10] });
+      }
+
+      function loadCorridor(corridorId, btnEl) {
+        currentCorridorId = corridorId;
+        var data = ALL_STOPS[corridorId];
+        showLoader('Loading ' + data.label + '...');
+        document.querySelectorAll('.corridor-btn').forEach(function(b) { b.classList.remove('active'); });
+        if (btnEl) btnEl.classList.add('active');
+        document.getElementById('header-subtitle').textContent = data.subtitle;
+        document.getElementById('stat-distance').textContent = data.distance;
+        document.getElementById('stat-time').textContent = data.time;
+        document.getElementById('stop-count').textContent = data.stops.length;
+        buildSeasons(data.seasons);
+        document.getElementById('stop-info').innerHTML = '<div class="default-msg">👆 Click any marker<br>to see road info</div>';
+        document.getElementById('notes-section').style.display = 'none';
+        document.getElementById('leh-banner').style.display = corridorId === 'delhi-manali' ? 'block' : 'none';
+        clearRoute(true);
+        markers.forEach(function(m) { map.removeLayer(m.marker); });
+        markers = [];
+        map.setView(data.center, data.zoom);
+        stops = data.stops;
+        buildStops();
+        drawRouteLine(stops);
+      }
+
+      function buildStops() {
+        var listContainer = document.getElementById('stops-list-items');
+        var entrySelect   = document.getElementById('entry-select');
+        var exitSelect    = document.getElementById('exit-select');
+        listContainer.innerHTML = '';
+        entrySelect.innerHTML = '<option value="">-- Select your start --</option>';
+        exitSelect.innerHTML  = '<option value="">-- Select your end --</option>';
+        markers = [];
+
+        stops.forEach(function(stop, index) {
+          var color = getBaseColor(stop);
+          var item = document.createElement('div');
+          item.className = 'stop-item';
+          item.id = 'stop-item-' + index;
+          item.innerHTML = '<div class="stop-dot" style="background:' + color + '"></div>' + stop.name;
+          item.onclick = function() { showStopInfo(stop); };
+          listContainer.appendChild(item);
+
+          var opt1 = document.createElement('option'); opt1.value = index; opt1.textContent = stop.name;
+          var opt2 = document.createElement('option'); opt2.value = index; opt2.textContent = stop.name;
+          entrySelect.appendChild(opt1);
+          exitSelect.appendChild(opt2);
+
+          var marker = L.marker([stop.lat, stop.lng], { icon: makeIcon(color) }).addTo(map);
+          marker.on('click', function() {
+            showStopInfo(stop);
+            markers.forEach(function(m) { m.marker.setIcon(makeIcon(m.baseColor)); });
+            markers[index].marker.setIcon(makeSpecialIcon('entry'));
+            document.getElementById('sidebar').classList.add('open');
+            document.getElementById('sidebar-overlay').classList.add('show');
+            setTimeout(function() {
+              document.getElementById('sidebar').scrollTop = 300;
+            }, 100);
+          });
+          markers.push({ marker: marker, stop: stop, index: index, baseColor: color });
+        });
+
+        stops.forEach(function(stop, index) {
+          fetch(FLASK_URL + '/api/weather?lat=' + stop.lat + '&lng=' + stop.lng)
+            .then(function(r) { return r.json(); })
+            .then(function(w) {
+              stop.weather = w;
+              if (w && !w.error) {
+                var override = getWeatherColor(w.temp, w.description);
+                if (override && markers[index]) {
+                  markers[index].marker.setIcon(makeIcon(override));
+                  var dot = document.querySelector('#stop-item-' + index + ' .stop-dot');
+                  if (dot) dot.style.background = override;
+                }
+              }
+            })
+            .catch(function() { stop.weather = null; });
+        });
+        setTimeout(hideLoader, 800);
+      }
+
+      function drawRouteLine(stopsArr) {
+        if (fullRouteLayer) { map.removeLayer(fullRouteLayer); fullRouteLayer = null; }
+        var waypoints = stopsArr.slice(0, 9).map(function(s) { return s.lng + ',' + s.lat; }).join(';');
+        fetch('https://router.project-osrm.org/route/v1/driving/' + waypoints + '?overview=full&geometries=geojson')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var coords = data.routes[0].geometry.coordinates;
+            var latLngs = coords.map(function(c) { return [c[1], c[0]]; });
+            fullRouteLayer = L.polyline(latLngs, { color: '#4fc3f7', weight: 3, opacity: 0.5 }).addTo(map);
+          })
+          .catch(function() {
+            var latLngs = stopsArr.map(function(s) { return [s.lat, s.lng]; });
+            fullRouteLayer = L.polyline(latLngs, { color: '#4fc3f7', weight: 2, opacity: 0.4, dashArray: '4,4' }).addTo(map);
+          });
+      }
+
+      function showStopInfo(stop) {
+        currentStopId = stop.id;
+        var tagsHTML = '';
+        for (var i = 0; i < stop.tags.length; i++) {
+          tagsHTML += '<span class="tag ' + stop.tags[i] + '">' + stop.labels[i] + '</span>';
+        }
+        document.getElementById('stop-info').innerHTML =
+          '<h2>📍 ' + stop.name + '</h2><p>' + stop.description + '</p>' + tagsHTML +
+          '<div id="road-condition"><h4>🛣️ Road Quality</h4><div id="road-condition-content"></div></div>' +
+          '<div id="weather-box"><h4>🌤️ Live Weather</h4><div id="weather-content"><div style="color:#444;font-size:12px;">Loading...</div></div></div>';
+        document.getElementById('weather-box').style.display = 'block';
+        renderCondition(stop);
+
+        if (stop.weather && !stop.weather.error) {
+          renderWeather(stop.weather);
+        } else {
+          fetch(FLASK_URL + '/api/weather?lat=' + stop.lat + '&lng=' + stop.lng)
+            .then(function(r) { return r.json(); })
+            .then(function(w) {
+              stop.weather = w;
+              if (w && !w.error) renderWeather(w);
+              else document.getElementById('weather-content').innerHTML = '<div style="color:#444;font-size:12px;">Weather unavailable</div>';
+            })
+            .catch(function() {
+              document.getElementById('weather-content').innerHTML = '<div style="color:#444;font-size:12px;">Weather unavailable (Flask not running)</div>';
+            });
+        }
+
+        document.getElementById('notes-section').style.display = 'block';
+        document.getElementById('notes-list').innerHTML = '<div style="color:#444;font-size:12px;">Loading...</div>';
+        document.getElementById('note-name').value = '';
+        document.getElementById('note-text').value = '';
+
+        fetch(FLASK_URL + '/api/notes/' + stop.id)
+          .then(function(r) { return r.json(); })
+          .then(function(notes) {
+            if (notes.length === 0) {
+              document.getElementById('notes-list').innerHTML = '<div class="no-notes">No notes yet. Be the first!</div>';
+            } else {
+              var html = '';
+              notes.forEach(function(n) {
+                html += '<div class="note-item"><div class="note-traveller">👤 ' + n.traveller + '</div><div class="note-text">' + n.note + '</div><div class="note-date">' + n.created_at + '</div></div>';
+              });
+              document.getElementById('notes-list').innerHTML = html;
+            }
+          })
+          .catch(function() {
+            document.getElementById('notes-list').innerHTML = '<div class="no-notes" style="color:#555;">Start Flask to load & save notes.</div>';
+          });
+      }
+
+      function renderCondition(stop) {
+        var condClass = 'condition-' + stop.condition;
+        var condIcon  = stop.condition === 'smooth' ? '🟢' : stop.condition === 'rough' ? '🟡' : '🔴';
+        document.getElementById('road-condition').style.display = 'block';
+        document.getElementById('road-condition-content').innerHTML =
+          '<div class="condition-row">' +
+            '<span class="condition-badge ' + condClass + '">' + condIcon + ' ' + stop.condition_label + '</span>' +
+          '</div>' +
+          '<div class="condition-tip">💡 ' + stop.condition_tip + '</div>';
+      }
+
+      function renderWeather(w) {
+        document.getElementById('weather-content').innerHTML =
+          '<div class="weather-main">' +
+            '<img src="https://openweathermap.org/img/wn/' + w.icon + '.png" width="40" height="40">' +
+            '<div><div class="weather-temp">' + w.temp + '°C</div>' +
+            '<div class="weather-desc">' + w.description + '</div></div>' +
+          '</div>' +
+          '<div class="weather-details">' +
+            '<div class="weather-detail">💧 <span>' + w.humidity + '%</span></div>' +
+            '<div class="weather-detail">💨 <span>' + w.wind + ' m/s</span></div>' +
+            '<div class="weather-detail">🌡️ <span>' + w.feels_like + '°C</span></div>' +
+          '</div>';
+      }
+
+      function submitNote() {
+        var name = document.getElementById('note-name').value.trim();
+        var text = document.getElementById('note-text').value.trim();
+        if (!name || !text) { alert('Please enter your name and note!'); return; }
+        fetch(FLASK_URL + '/api/notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stop_id: currentStopId, traveller: name, note: text })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+          fetch(FLASK_URL + '/api/notes/' + currentStopId)
+            .then(function(r) { return r.json(); })
+            .then(function(notes) {
+              var html = '';
+              notes.forEach(function(n) {
+                html += '<div class="note-item"><div class="note-traveller">👤 ' + n.traveller + '</div><div class="note-text">' + n.note + '</div><div class="note-date">' + n.created_at + '</div></div>';
+              });
+              document.getElementById('notes-list').innerHTML = html;
+              document.getElementById('note-name').value = '';
+              document.getElementById('note-text').value = '';
+            });
+        })
+        .catch(function() { alert('Flask is not running. Cannot save notes right now.'); });
+      }
+
+      function filterStops(tag, event) {
+        document.querySelectorAll('.filter-btn').forEach(function(btn) { btn.classList.remove('active'); });
+        if (event && event.target) event.target.classList.add('active');
+        markers.forEach(function(m) {
+          var visible = tag === 'all' || m.stop.tags.indexOf(tag) !== -1 || (tag === 'very-rough' && m.stop.condition === 'very-rough');
+          if (visible) { if (!map.hasLayer(m.marker)) map.addLayer(m.marker); }
+          else { if (map.hasLayer(m.marker)) map.removeLayer(m.marker); }
+          document.getElementById('stop-item-' + m.index).classList.toggle('hidden', !visible);
+        });
+      }
+
+      function planRoute() {
+        var entryIdx = parseInt(document.getElementById('entry-select').value);
+        var exitIdx  = parseInt(document.getElementById('exit-select').value);
+        if (isNaN(entryIdx) || isNaN(exitIdx)) { alert('Please select both entry and exit points!'); return; }
+        if (entryIdx === exitIdx) { alert('Entry and exit cannot be the same stop!'); return; }
+        var fromIdx = Math.min(entryIdx, exitIdx);
+        var toIdx   = Math.max(entryIdx, exitIdx);
+        var entryStop = stops[fromIdx];
+        var exitStop  = stops[toIdx];
+        clearRoute(true);
+        var routeStops = stops.slice(fromIdx, toIdx + 1);
+        var latLngs = routeStops.map(function(s) { return [s.lat, s.lng]; });
+        routePolylineBg = L.polyline(latLngs, { color: '#fff', weight: 6, opacity: 0.1 }).addTo(map);
+        routePolyline   = L.polyline(latLngs, { color: '#4fc3f7', weight: 4, opacity: 1, dashArray: '8,6' }).addTo(map);
+        routeStops.forEach(function(stop, i) {
+          var isEntry = (i === 0);
+          var isExit  = (i === routeStops.length - 1);
+          var icon = isEntry ? makeSpecialIcon('entry') : isExit ? makeSpecialIcon('exit') : makeIcon('#4fc3f7');
+          var m = L.marker([stop.lat, stop.lng], { icon: icon, zIndexOffset: 1000, interactive: false }).addTo(map);
+          routeHighlightMarkers.push(m);
+        });
+        map.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
+        var warningStops = routeStops.filter(function(s) {
+          return s.tags.indexOf('unsafe') !== -1 || s.tags.indexOf('no-network') !== -1 || s.tags.indexOf('permit') !== -1;
+        });
+        var warningHTML = '';
+        if (warningStops.length > 0) {
+          warningHTML = '<div style="margin-top:6px;color:#e67e22;font-size:11px;">⚠️ Heads up: ' + warningStops.map(function(s) { return s.name; }).join(', ') + ' need extra attention.</div>';
+        }
+        var resultDiv = document.getElementById('planner-result');
+        resultDiv.innerHTML =
+          '<div class="pr-stops">📍 ' + entryStop.name + ' → 🏁 ' + exitStop.name + '</div>' +
+          '<div>' + routeStops.length + ' stops · ' + (routeStops.length - 1) + ' segments</div>' +
+          warningHTML;
+        resultDiv.style.display = 'block';
+        document.getElementById('clear-btn').style.display = 'block';
+      }
+
+      function clearRoute(silent) {
+        if (routePolyline)   { map.removeLayer(routePolyline);   routePolyline = null; }
+        if (routePolylineBg) { map.removeLayer(routePolylineBg); routePolylineBg = null; }
+        routeHighlightMarkers.forEach(function(m) { map.removeLayer(m); });
+        routeHighlightMarkers = [];
+        if (!silent) {
+          document.getElementById('planner-result').style.display = 'none';
+          document.getElementById('clear-btn').style.display = 'none';
+          document.getElementById('entry-select').value = '';
+          document.getElementById('exit-select').value = '';
+          map.setView(ALL_STOPS[currentCorridorId].center, ALL_STOPS[currentCorridorId].zoom);
+        }
+      }
+
+      function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+        document.getElementById('sidebar-overlay').classList.toggle('show');
+      }
+
+      function continueToLeh() {
+        var lehBtn = document.querySelectorAll('.corridor-btn')[1];
+        loadCorridor('delhi-leh', lehBtn);
+        document.getElementById('entry-select').value = 5;
+        document.getElementById('route-planner').scrollIntoView({ behavior: 'smooth' });
+      }
+
+      function showLoader(text) {
+        document.getElementById('spinner-text').textContent = text || 'Loading route...';
+        document.getElementById('corridor-loader').classList.add('show');
+      }
+
+      function hideLoader() {
+        document.getElementById('corridor-loader').classList.remove('show');
+      }
+
+      loadCorridor('delhi-manali', null);
+
+    </script>
+  </body>
+</html>
