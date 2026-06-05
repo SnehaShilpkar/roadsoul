@@ -743,8 +743,8 @@
             routePolyline   = L.polyline(roadLatLngs, { color: '#4fc3f7', weight: 4, opacity: 1 }).addTo(map);
             map.fitBounds(L.latLngBounds(roadLatLngs), { padding: [40, 40] });
           })
-          .catch(function() {
-            // Fallback to straight line if OSRM fails
+          .catch(function(err) {
+            console.error('OSRM error:', err);
             routePolylineBg = L.polyline(latLngs, { color: '#fff', weight: 6, opacity: 0.1 }).addTo(map);
             routePolyline   = L.polyline(latLngs, { color: '#4fc3f7', weight: 4, opacity: 1, dashArray: '8,6' }).addTo(map);
             map.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
