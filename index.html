@@ -720,8 +720,35 @@
         clearRoute(true);
         var routeStops = stops.slice(fromIdx, toIdx + 1);
         var latLngs = routeStops.map(function(s) { return [s.lat, s.lng]; });
-        routePolylineBg = L.polyline(latLngs, { color: '#fff', weight: 6, opacity: 0.1 }).addTo(map);
-        routePolyline   = L.polyline(latLngs, { color: '#4fc3f7', weight: 4, opacity: 1, dashArray: '8,6' }).addTo(map);
+        // Try OSRM real road routing first
+        // OSRM max 9 waypoints — use first, last, and evenly spaced middle points
+        var waypointsStr;
+        if (routeStops.length <= 9) {
+          waypointsStr = routeStops.map(function(s) { return s.lng + ',' + s.lat; }).join(';');
+        } else {
+          var sampled = [routeStops[0]];
+          var step = (routeStops.length - 1) / 7;
+          for (var i = 1; i <= 7; i++) {
+            sampled.push(routeStops[Math.round(i * step)]);
+          }
+          sampled.push(routeStops[routeStops.length - 1]);
+          waypointsStr = sampled.map(function(s) { return s.lng + ',' + s.lat; }).join(';');
+        }
+        fetch('https://router.project-osrm.org/route/v1/driving/' + waypointsStr + '?overview=full&geometries=geojson')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var coords = data.routes[0].geometry.coordinates;
+            var roadLatLngs = coords.map(function(c) { return [c[1], c[0]]; });
+            routePolylineBg = L.polyline(roadLatLngs, { color: '#fff', weight: 6, opacity: 0.15 }).addTo(map);
+            routePolyline   = L.polyline(roadLatLngs, { color: '#4fc3f7', weight: 4, opacity: 1 }).addTo(map);
+            map.fitBounds(L.latLngBounds(roadLatLngs), { padding: [40, 40] });
+          })
+          .catch(function() {
+            // Fallback to straight line if OSRM fails
+            routePolylineBg = L.polyline(latLngs, { color: '#fff', weight: 6, opacity: 0.1 }).addTo(map);
+            routePolyline   = L.polyline(latLngs, { color: '#4fc3f7', weight: 4, opacity: 1, dashArray: '8,6' }).addTo(map);
+            map.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
+          });
         routeStops.forEach(function(stop, i) {
           var isEntry = (i === 0);
           var isExit  = (i === routeStops.length - 1);
@@ -729,7 +756,7 @@
           var m = L.marker([stop.lat, stop.lng], { icon: icon, zIndexOffset: 1000, interactive: false }).addTo(map);
           routeHighlightMarkers.push(m);
         });
-        map.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
+        
         var warningStops = routeStops.filter(function(s) {
           return s.tags.indexOf('unsafe') !== -1 || s.tags.indexOf('no-network') !== -1 || s.tags.indexOf('permit') !== -1;
         });
