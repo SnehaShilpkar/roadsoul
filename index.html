@@ -734,17 +734,21 @@
           sampled.push(routeStops[routeStops.length - 1]);
           waypointsStr = sampled.map(function(s) { return s.lng + ',' + s.lat; }).join(';');
         }
+
         fetch('https://router.project-osrm.org/route/v1/driving/' + waypointsStr + '?overview=full&geometries=geojson')
           .then(function(r) { return r.json(); })
           .then(function(data) {
-            var coords = data.routes[0].geometry.coordinates;
-            var roadLatLngs = coords.map(function(c) { return [c[1], c[0]]; });
-            routePolylineBg = L.polyline(roadLatLngs, { color: '#fff', weight: 6, opacity: 0.15 }).addTo(map);
-            routePolyline   = L.polyline(roadLatLngs, { color: '#4fc3f7', weight: 4, opacity: 1 }).addTo(map);
-            map.fitBounds(L.latLngBounds(roadLatLngs), { padding: [40, 40] });
+            if (data.code === 'Ok' && data.routes && data.routes[0]) {
+              var coords = data.routes[0].geometry.coordinates;
+              var roadLatLngs = coords.map(function(c) { return [c[1], c[0]]; });
+              if (routePolyline) { map.removeLayer(routePolyline); }
+              if (routePolylineBg) { map.removeLayer(routePolylineBg); }
+              routePolylineBg = L.polyline(roadLatLngs, { color: '#fff', weight: 6, opacity: 0.15 }).addTo(map);
+              routePolyline   = L.polyline(roadLatLngs, { color: '#4fc3f7', weight: 4, opacity: 1 }).addTo(map);
+              map.fitBounds(L.latLngBounds(roadLatLngs), { padding: [40, 40] });
+            }
           })
-          .catch(function(err) {
-            console.error('OSRM error:', err);
+          .catch(function() {
             routePolylineBg = L.polyline(latLngs, { color: '#fff', weight: 6, opacity: 0.1 }).addTo(map);
             routePolyline   = L.polyline(latLngs, { color: '#4fc3f7', weight: 4, opacity: 1, dashArray: '8,6' }).addTo(map);
             map.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
